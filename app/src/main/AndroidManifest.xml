@@ -5,6 +5,7 @@
     <uses-permission android:name="android.permission.INTERNET"/>
 
     <application
+        android:name=".Application"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
@@ -33,6 +34,8 @@
             <meta-data
                 android:name="android.support.PARENT_ACTIVITY"
                 android:value="io.prefanatic.mvitesting.list.FruitListActivity"/>
+        </activity>
+        <activity android:name=".persistence.PersistenceActivity">
         </activity>
     </application>
 

@@ -6,13 +6,11 @@ import android.support.design.widget.Snackbar
 import android.support.v7.app.AppCompatActivity
 import android.support.v7.widget.Toolbar
 import com.bumptech.glide.Glide
+import io.prefanatic.mvitesting.MvpActivity
 import io.prefanatic.mvitesting.R
 import kotlinx.android.synthetic.main.activity_fruit.*
 
-class FruitDetailActivity : AppCompatActivity(), FruitDetailView {
-
-    val presenter: FruitDetailPresenter by lazy { FruitDetailPresenter(FruitDetailInteractor()) }
-
+class FruitDetailActivity : MvpActivity<FruitDetailPresenter, FruitDetailView>(), FruitDetailView {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -26,14 +24,10 @@ class FruitDetailActivity : AppCompatActivity(), FruitDetailView {
                     .setAction("Action", null).show()
         }
         supportActionBar!!.setDisplayHomeAsUpEnabled(true)
-
-        presenter.attach(this)
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-
-        presenter.detach()
+    override fun supplyPresenter(): FruitDetailPresenter {
+        return FruitDetailPresenter(FruitDetailInteractor())
     }
 
     override fun render(state: FruitDetailState) {

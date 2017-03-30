@@ -3,6 +3,7 @@ package io.prefanatic.mvitesting.list
 import io.prefanatic.mvitesting.FruitDataSource
 import io.prefanatic.mvitesting.Fruits
 import io.reactivex.Observable
+import io.reactivex.ObservableTransformer
 import java.util.concurrent.TimeUnit
 
 /**
@@ -44,5 +45,4 @@ class FruitListInteractor {
                 .startWith(Loading())
                 .onErrorReturn(::Error)
     }
-
 }

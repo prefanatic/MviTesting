@@ -2,6 +2,13 @@
       xmlns:app="http://schemas.android.com/apk/res-auto"
       xmlns:tools="http://schemas.android.com/tools"
       tools:context="io.prefanatic.mvitesting.ScrollingActivity">
+
+    <item
+        android:id="@+id/action_persistence"
+        android:icon="@mipmap/ic_launcher"
+        android:title="Persistence"
+        app:showAsAction="always"/>
+
     <item
         android:id="@+id/action_set_loading"
         android:icon="@drawable/ic_cloud_download_black_24dp"
