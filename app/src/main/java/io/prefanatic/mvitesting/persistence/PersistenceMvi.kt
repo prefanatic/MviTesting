@@ -1,7 +1,6 @@
 package io.prefanatic.mvitesting.persistence
 
 import io.prefanatic.mvitesting.BasePresenter
-import io.prefanatic.mvitesting.IntentBinder
 import io.prefanatic.mvitesting.MviPresenterImpl
 import io.prefanatic.mvitesting.MviView
 import io.reactivex.Observable
@@ -25,16 +24,11 @@ class PersistencePresenterImpl : MviPresenterImpl<PersistenceView, PersistenceSt
                 .map { PersistenceState(foreverItems) }
                 .observeOn(AndroidSchedulers.mainThread())
 
-        val foreverIntent = intent(object: IntentBinder<PersistenceView, PersistenceState> {
-            override fun bind(view: PersistenceView): Observable<PersistenceState> {
-                return foreverObservable
-            }
-
-        })
-
-        setViewStateObservable(foreverIntent) {
-            view!!.render(it)
+        val foreverIntent = intent {
+            foreverObservable
         }
+
+        setViewStateObservable(foreverIntent)
     }
 
     override fun toggleEmissions() {
@@ -49,6 +43,6 @@ interface PersistencePresenter : BasePresenter<PersistenceView> {
 interface PersistenceView : MviView<PersistenceState>
 
 data class PersistenceState(
-    val items: List<Int> = ArrayList()
+        val items: List<Int> = ArrayList()
 )
 

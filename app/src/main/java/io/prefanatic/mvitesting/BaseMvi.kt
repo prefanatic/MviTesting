@@ -1,6 +1,5 @@
 package io.prefanatic.mvitesting
 
-import android.view.View
 import io.reactivex.Observable
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.disposables.Disposable
@@ -22,9 +21,6 @@ import kotlin.reflect.KProperty
 abstract class MviPresenterImpl<View : MviView<State>, State> : BasePresenterImpl<View>() {
     var hasBoundToView = false
 
-    var viewStateObservable: Observable<out State>? = null
-    var viewStateBlock: ((State) -> Unit)? = null
-
     /**
      * Behavior Subject that is responsible for forwarding view state events out to the view.
      *
@@ -35,11 +31,6 @@ abstract class MviPresenterImpl<View : MviView<State>, State> : BasePresenterImp
      * Upon attach, this subject will be subscribed.
      */
     val viewStateSubject: BehaviorSubject<State> = BehaviorSubject.create()
-
-    /**
-     *
-     */
-    var viewIntents: List<PublishSubject<*>> = ArrayList()
 
     /**
      *
@@ -94,13 +85,6 @@ abstract class MviPresenterImpl<View : MviView<State>, State> : BasePresenterImp
     }
 
     private fun attachViewState() {
-        assert(viewStateObservable != null) {
-            "Cannot subscribe to a null ViewState Observable"
-        }
-        assert(viewStateBlock != null) {
-            "Cannot subscribe when there is no ViewState invocation block."
-        }
-
         val observer = ViewStateObserver(view!!)
         viewStateForwardingDisposable = viewStateSubject.subscribeWith(observer)
     }
@@ -111,25 +95,20 @@ abstract class MviPresenterImpl<View : MviView<State>, State> : BasePresenterImp
     private fun attachIntents() {
         intentDisposable = CompositeDisposable()
 
-        intentForwardingPairs.forEach {
-            val subject = it.subject as Subject<Any>
-            val observer = LooseSubjectObserver(subject)
+        intentForwardingPairs.forEach { (binder, subject) ->
+            val observer = LooseSubjectObserver(subject as Subject<Any>)
 
             Chapter.d("Attaching forwarding pair to subject $subject")
-            intentDisposable += it.binder.bind(view!!)
+            intentDisposable += binder.bind(view!!)
                     .subscribeWith(observer)
         }
     }
 
-    fun setViewStateObservable(observable: Observable<out State>, block: (State) -> Unit) {
-        if (viewStateObservable != null) {
+    fun setViewStateObservable(observable: Observable<out State>) {
+        if (viewStateDisposable != null) {
             throw RuntimeException("A ViewState Observable already has been subscribed." +
                     "This method should only ever run once.")
         }
-
-        // TODO: Does this need to be saved?
-        this.viewStateObservable = observable
-        this.viewStateBlock = block
 
         // Lock in the observable to the view state subject.
         // TODO: Do we ever unsubscribe from this?  This is internal - detach / attach does not confuse this portion.
@@ -157,6 +136,15 @@ abstract class MviPresenterImpl<View : MviView<State>, State> : BasePresenterImp
 
         return subject
     }
+
+    /**
+     * Syntactic sugar variant of [intent].
+     */
+    fun <T> intent(binder: View.() -> Observable<T>): Observable<T> {
+        return intent(object : IntentBinder<View, T> {
+            override fun bind(view: View): Observable<T> = binder.invoke(view)
+        })
+    }
 }
 
 /**
@@ -167,7 +155,7 @@ abstract class MviPresenterImpl<View : MviView<State>, State> : BasePresenterImp
  *
  * This Observer is recreated upon every attach event.
  */
-class ViewStateObserver<out View: MviView<T>, T>(val view: View) : DisposableObserver<T>() {
+class ViewStateObserver<out View : MviView<T>, T>(val view: View) : DisposableObserver<T>() {
     override fun onComplete() {
         throw RuntimeException("The View State must never complete.")
     }
@@ -188,6 +176,9 @@ class ViewStateObserver<out View: MviView<T>, T>(val view: View) : DisposableObs
  * A "loose" Observer, used to join an Intent and a Subject together.
  *
  * This Observer does not emit out onError or onComplete to the Subject.
+ *
+ * TODO: The nature of this Observer does not mean much to the implementor,
+ * in terms of what is allowed and what isn't.
  */
 class LooseSubjectObserver<T>(val subject: Subject<T>) : DisposableObserver<T>() {
     override fun onNext(t: T) {

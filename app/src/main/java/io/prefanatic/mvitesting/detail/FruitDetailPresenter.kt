@@ -11,8 +11,6 @@ class FruitDetailPresenter(val interactor: FruitDetailInteractor) : MviPresenter
         val searchIntent = interactor.load()
                 .observeOn(AndroidSchedulers.mainThread())
 
-        setViewStateObservable(searchIntent) {
-            view!!.render(it)
-        }
+        setViewStateObservable(searchIntent)
     }
 }
