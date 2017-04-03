@@ -61,14 +61,14 @@ abstract class MviPresenterImpl<View : MviView<State>, State> : BasePresenterImp
     var intentDisposable: CompositeDisposable = CompositeDisposable()
 
     /**
-     * Disposable used to carry the view state subscription.
-     *
-     * Upon detach, this disposable will be disposed.
-     *
-     * Upon attach, a new disposable will be created, and the Observable given by [viewStateObservable]
-     * will be subscribed to.
+     * Disposable used to carry the subscription between the internal presenter chain to the View State.
      */
     var viewStateDisposable: Disposable? = null
+
+    /**
+     * Disposable used to carry the subscription between the [viewStateSubject] and the View's render.
+     */
+    var viewStateForwardingDisposable: Disposable? = null
 
     abstract fun bind()
 
@@ -89,7 +89,7 @@ abstract class MviPresenterImpl<View : MviView<State>, State> : BasePresenterImp
     override fun detachView() {
         super.detachView()
 
-        viewStateDisposable?.dispose()
+        viewStateForwardingDisposable?.dispose()
         intentDisposable.dispose()
     }
 
@@ -102,7 +102,7 @@ abstract class MviPresenterImpl<View : MviView<State>, State> : BasePresenterImp
         }
 
         val observer = ViewStateObserver(view!!)
-        viewStateDisposable = viewStateSubject.subscribeWith(observer)
+        viewStateForwardingDisposable = viewStateSubject.subscribeWith(observer)
     }
 
     /**
@@ -113,7 +113,7 @@ abstract class MviPresenterImpl<View : MviView<State>, State> : BasePresenterImp
 
         intentForwardingPairs.forEach {
             val subject = it.subject as Subject<Any>
-            val observer = LooseObserver(subject)
+            val observer = LooseSubjectObserver(subject)
 
             Chapter.d("Attaching forwarding pair to subject $subject")
             intentDisposable += it.binder.bind(view!!)
@@ -127,11 +127,14 @@ abstract class MviPresenterImpl<View : MviView<State>, State> : BasePresenterImp
                     "This method should only ever run once.")
         }
 
+        // TODO: Does this need to be saved?
         this.viewStateObservable = observable
         this.viewStateBlock = block
 
         // Lock in the observable to the view state subject.
-
+        // TODO: Do we ever unsubscribe from this?  This is internal - detach / attach does not confuse this portion.
+        val observer = LooseSubjectObserver(viewStateSubject)
+        viewStateDisposable = observable.subscribeWith(observer)
     }
 
     /**
@@ -142,8 +145,8 @@ abstract class MviPresenterImpl<View : MviView<State>, State> : BasePresenterImp
      *
      * Observables bound with the [IntentBinder] are added to a list of possible forwarding
      * pairs.  These forwarding pairs are iterated through upon attach to rebind them to their
-     * associated Subject, through a [LooseObserver].  On view detach, the disposables produced
-     * from both the [LooseObserver] and the Subject are disposed of.
+     * associated Subject, through a [LooseSubjectObserver].  On view detach, the disposables produced
+     * from both the [LooseSubjectObserver] and the Subject are disposed of.
      */
     fun <T> intent(binder: IntentBinder<View, T>): Observable<T> {
         val subject = PublishSubject.create<T>()
@@ -186,7 +189,7 @@ class ViewStateObserver<out View: MviView<T>, T>(val view: View) : DisposableObs
  *
  * This Observer does not emit out onError or onComplete to the Subject.
  */
-class LooseObserver<T>(val subject: Subject<T>) : DisposableObserver<T>() {
+class LooseSubjectObserver<T>(val subject: Subject<T>) : DisposableObserver<T>() {
     override fun onNext(t: T) {
         subject.onNext(t)
     }
