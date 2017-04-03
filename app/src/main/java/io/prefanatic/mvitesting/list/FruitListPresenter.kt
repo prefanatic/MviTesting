@@ -9,22 +9,22 @@ import io.reactivex.android.schedulers.AndroidSchedulers
  */
 class FruitListPresenter(val interactor: FruitListInteractor) : MviPresenterImpl<FruitListView, FruitListState>() {
     override fun bind() {
-        val results = view.searchIntent()
+        val results = view!!.searchIntent()
                 .switchMap { interactor.search(it) }
                 .observeOn(AndroidSchedulers.mainThread())
 
-        val load = view.loadTestIntent()
+        val load = view!!.loadTestIntent()
                 .switchMap { interactor.load() }
                 .observeOn(AndroidSchedulers.mainThread())
 
-        val error = view.errorTestIntent()
+        val error = view!!.errorTestIntent()
                 .switchMap { interactor.error() }
                 .observeOn(AndroidSchedulers.mainThread())
 
         val allState = Observable.merge<FruitListState>(results, load, error)
 
         setViewStateObservable(allState) {
-            view.render(it)
+            view!!.render(it)
         }
     }
 }

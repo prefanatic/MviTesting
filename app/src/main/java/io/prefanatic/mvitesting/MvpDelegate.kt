@@ -1,7 +1,6 @@
 package io.prefanatic.mvitesting
 
 import android.os.Bundle
-import io.prefanatic.mvitesting.list.BasePresenter
 
 const val PRESENTER_ID = "presenter.id"
 

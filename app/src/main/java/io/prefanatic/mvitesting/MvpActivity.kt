@@ -2,7 +2,6 @@ package io.prefanatic.mvitesting
 
 import android.os.Bundle
 import android.support.v7.app.AppCompatActivity
-import io.prefanatic.mvitesting.list.BasePresenter
 
 /**
  * Created by cgoldberg02 on 3/24/17.

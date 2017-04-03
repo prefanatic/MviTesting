@@ -1,13 +1,14 @@
 package io.prefanatic.mvitesting
 
-import com.geckohealth.Diary
+import android.view.View
 import io.reactivex.Observable
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.disposables.Disposable
-import io.reactivex.internal.operators.observable.ObservableRange
-import io.reactivex.rxkotlin.subscribeBy
+import io.reactivex.observers.DisposableObserver
+import io.reactivex.rxkotlin.plusAssign
 import io.reactivex.subjects.BehaviorSubject
 import io.reactivex.subjects.PublishSubject
+import io.reactivex.subjects.Subject
 import java.lang.ref.WeakReference
 import java.util.*
 import kotlin.collections.ArrayList
@@ -18,7 +19,7 @@ import kotlin.reflect.KProperty
  * Created by cgoldberg02 on 3/23/17.
  */
 
-abstract class MviPresenterImpl<View : BaseView, State> : BasePresenterImpl<View>() {
+abstract class MviPresenterImpl<View : MviView<State>, State> : BasePresenterImpl<View>() {
     var hasBoundToView = false
 
     var viewStateObservable: Observable<out State>? = null
@@ -43,7 +44,7 @@ abstract class MviPresenterImpl<View : BaseView, State> : BasePresenterImpl<View
     /**
      *
      */
-    var intentObservables: MutableList<Observable<*>> = ArrayList()
+    var intentForwardingPairs: MutableList<IntentForwardingPair<View, *>> = ArrayList()
 
     /**
      * Composite Disposable used to carry the combined disposables of all currently-subscribed
@@ -81,7 +82,8 @@ abstract class MviPresenterImpl<View : BaseView, State> : BasePresenterImpl<View
             hasBoundToView = true
         }
 
-        subscribeViewState()
+        attachIntents()
+        attachViewState()
     }
 
     override fun detachView() {
@@ -91,7 +93,7 @@ abstract class MviPresenterImpl<View : BaseView, State> : BasePresenterImpl<View
         intentDisposable.dispose()
     }
 
-    private fun subscribeViewState() {
+    private fun attachViewState() {
         assert(viewStateObservable != null) {
             "Cannot subscribe to a null ViewState Observable"
         }
@@ -99,20 +101,23 @@ abstract class MviPresenterImpl<View : BaseView, State> : BasePresenterImpl<View
             "Cannot subscribe when there is no ViewState invocation block."
         }
 
-        viewStateDisposable = viewStateObservable?.subscribe({
-            Diary.d("State -> $it")
-            viewStateBlock?.invoke(it)
-        }, { throwable ->
-            Diary.e(throwable, "Wowzers")
-        })
+        val observer = ViewStateObserver(view!!)
+        viewStateDisposable = viewStateSubject.subscribeWith(observer)
     }
 
     /**
      * Attaches all known intents to the view.
      */
     private fun attachIntents() {
-        intentObservables.forEach {
-            it.subscribe()
+        intentDisposable = CompositeDisposable()
+
+        intentForwardingPairs.forEach {
+            val subject = it.subject as Subject<Any>
+            val observer = LooseObserver(subject)
+
+            Chapter.d("Attaching forwarding pair to subject $subject")
+            intentDisposable += it.binder.bind(view!!)
+                    .subscribeWith(observer)
         }
     }
 
@@ -124,31 +129,102 @@ abstract class MviPresenterImpl<View : BaseView, State> : BasePresenterImpl<View
 
         this.viewStateObservable = observable
         this.viewStateBlock = block
+
+        // Lock in the observable to the view state subject.
+
     }
 
-    fun <T> asBehavior(observable: Observable<T>): Observable<T> = BehaviorSubject.create<T>()
-            .apply {
-                observable
-                        .doOnSubscribe { intentDisposable.add(it) }
-                        .doOnDispose { Chapter.d("Hello I've been disposed.") }
-                        .subscribe(this)
-            }
+    /**
+     * Adds an Observable as an View Intent.
+     *
+     * This allows the framework to handle subscribing and disposing of this Observable
+     * appropriately, upon lifecycle and detach events.
+     *
+     * Observables bound with the [IntentBinder] are added to a list of possible forwarding
+     * pairs.  These forwarding pairs are iterated through upon attach to rebind them to their
+     * associated Subject, through a [LooseObserver].  On view detach, the disposables produced
+     * from both the [LooseObserver] and the Subject are disposed of.
+     */
+    fun <T> intent(binder: IntentBinder<View, T>): Observable<T> {
+        val subject = PublishSubject.create<T>()
+        intentForwardingPairs.add(IntentForwardingPair(
+                binder = binder,
+                subject = subject
+        ))
 
-    fun <T> intent(block: View.() -> Observable<T>): Observable<T> {
-        val observable = block.invoke(view!!)
-        intentObservables.add(observable)
-
-        return observable
+        return subject
     }
 }
 
 /**
- * Used to hold a relationship pair between an intent observable, and it's subject.
+ * An Observer used to join the rendered state (as directed by the implementor presenter) and the
+ * View's [MviView.render] together.
+ *
+ * This Observer only allows onNext emissions.  Any onComplete or onError will throw a RuntimeException.
+ *
+ * This Observer is recreated upon every attach event.
  */
-data class IntentForwardingPair<T>(
-        val observable: Observable<T>,
+class ViewStateObserver<out View: MviView<T>, T>(val view: View) : DisposableObserver<T>() {
+    override fun onComplete() {
+        throw RuntimeException("The View State must never complete.")
+    }
+
+    override fun onNext(t: T) {
+        Chapter.d("State -> $t")
+
+        view.render(t)
+    }
+
+    override fun onError(e: Throwable?) {
+        throw RuntimeException("Errors sent through to the View State must be caught and handled with " +
+                "onErrorResume or another applicable catcher.", e)
+    }
+}
+
+/**
+ * A "loose" Observer, used to join an Intent and a Subject together.
+ *
+ * This Observer does not emit out onError or onComplete to the Subject.
+ */
+class LooseObserver<T>(val subject: Subject<T>) : DisposableObserver<T>() {
+    override fun onNext(t: T) {
+        subject.onNext(t)
+    }
+
+    override fun onError(e: Throwable?) {
+        throw e!!
+    }
+
+    override fun onComplete() {
+        throw RuntimeException("A view intent should not complete.")
+    }
+}
+
+/**
+ * Reference pair between an [IntentBinder] and a Subject.
+ *
+ * This forwarding pair is analyzed during view attach events.  The binder within this pair
+ * is executed to determine the [Observable] used to emit values into the pair's subject.
+ *
+ * Upon attach, the Observable from the binder is subscribed to the subject.
+ *
+ * The subject in this forwarding pair will always be subscribed to, by the presenter's reducer.
+ */
+data class IntentForwardingPair<in View, T>(
+        val binder: IntentBinder<View, T>,
         val subject: PublishSubject<T>
 )
+
+/**
+ * Interface used to construct an Intent Observable from a View
+ */
+interface IntentBinder<in View, T> {
+    fun bind(view: View): Observable<T>
+}
+
+interface ViewStateBinder<in View> {
+    fun bind(view: View)
+}
 
 //AIzaSyDXy8wLt3NgwvqQsNjCdRmiGSaDt3Uaxec
 

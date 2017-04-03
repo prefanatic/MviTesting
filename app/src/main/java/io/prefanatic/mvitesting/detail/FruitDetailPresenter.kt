@@ -1,6 +1,6 @@
 package io.prefanatic.mvitesting.detail
 
-import io.prefanatic.mvitesting.list.MviPresenterImpl
+import io.prefanatic.mvitesting.MviPresenterImpl
 import io.reactivex.android.schedulers.AndroidSchedulers
 
 /**
@@ -12,7 +12,7 @@ class FruitDetailPresenter(val interactor: FruitDetailInteractor) : MviPresenter
                 .observeOn(AndroidSchedulers.mainThread())
 
         setViewStateObservable(searchIntent) {
-            view.render(it)
+            view!!.render(it)
         }
     }
 }

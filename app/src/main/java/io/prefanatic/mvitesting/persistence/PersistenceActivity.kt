@@ -31,20 +31,16 @@ class PersistenceActivity : MvpActivity<PersistencePresenter, PersistenceView>()
     override fun supplyPresenter(): PersistencePresenter = DependencyInjection.persistencePresenter
 
     override fun render(state: PersistenceState) {
-        when (state) {
-            is Result -> {
-                adapter.data = state.items
-            }
-        }
+        adapter.data = state.items
     }
 }
 
 class Adapter : RecyclerView.Adapter<Adapter.ViewHolder>() {
     var data: List<Int> = ArrayList()
-    set(value) {
-        field = value
-        notifyDataSetChanged()
-    }
+        set(value) {
+            field = value
+            notifyDataSetChanged()
+        }
 
     override fun getItemCount(): Int = data.size
 

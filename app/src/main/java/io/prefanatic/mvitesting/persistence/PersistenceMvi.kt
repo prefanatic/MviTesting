@@ -1,6 +1,7 @@
 package io.prefanatic.mvitesting.persistence
 
 import io.prefanatic.mvitesting.BasePresenter
+import io.prefanatic.mvitesting.IntentBinder
 import io.prefanatic.mvitesting.MviPresenterImpl
 import io.prefanatic.mvitesting.MviView
 import io.reactivex.Observable
@@ -21,12 +22,17 @@ class PersistencePresenterImpl : MviPresenterImpl<PersistenceView, PersistenceSt
         val foreverObservable = Observable.interval(1, TimeUnit.SECONDS)
                 .filter { shouldEmit.get() }
                 .doOnNext { foreverItems.add(0, foreverItems.size + 1) }
-                .map { Result(foreverItems) }
+                .map { PersistenceState(foreverItems) }
                 .observeOn(AndroidSchedulers.mainThread())
 
-        val foreverIntent = intent { foreverObservable }
+        val foreverIntent = intent(object: IntentBinder<PersistenceView, PersistenceState> {
+            override fun bind(view: PersistenceView): Observable<PersistenceState> {
+                return foreverObservable
+            }
 
-        setViewStateObservable(asBehavior(foreverIntent)) {
+        })
+
+        setViewStateObservable(foreverIntent) {
             view!!.render(it)
         }
     }
@@ -42,7 +48,7 @@ interface PersistencePresenter : BasePresenter<PersistenceView> {
 
 interface PersistenceView : MviView<PersistenceState>
 
-sealed class PersistenceState
-data class Result(
-        val items: List<Int>
-) : PersistenceState()
+data class PersistenceState(
+    val items: List<Int> = ArrayList()
+)
+
