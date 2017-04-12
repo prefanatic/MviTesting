@@ -103,7 +103,7 @@ abstract class MviPresenter<View : MviView<State>, State> : BasePresenterImpl<Vi
         intentDisposable = CompositeDisposable()
 
         intentForwardingPairs.forEach { (binder, subject) ->
-            val observer = LooseSubjectObserver(subject as Subject<Any>)
+            val observer = RelayObserver(subject as Subject<Any>)
 
             Chapter.d("Attaching forwarding pair to subject $subject")
             intentDisposable += binder.bind(view!!)
@@ -137,7 +137,7 @@ abstract class MviPresenter<View : MviView<State>, State> : BasePresenterImpl<Vi
 
         // Lock in the observable to the view state subject.
         // TODO: Do we ever unsubscribe from this?  This is internal - detach / attach does not confuse this portion.
-        val observer = LooseSubjectObserver(viewStateSubject)
+        val observer = RelayObserver(viewStateSubject)
         viewStateDisposable = observable.subscribeWith(observer)
     }
 
@@ -149,8 +149,8 @@ abstract class MviPresenter<View : MviView<State>, State> : BasePresenterImpl<Vi
      *
      * Observables bound with the [IntentBinder] are added to a list of possible forwarding
      * pairs.  These forwarding pairs are iterated through upon attach to rebind them to their
-     * associated Subject, through a [LooseSubjectObserver].  On view detach, the disposables produced
-     * from both the [LooseSubjectObserver] and the Subject are disposed of.
+     * associated Subject, through a [RelayObserver].  On view detach, the disposables produced
+     * from both the [RelayObserver] and the Subject are disposed of.
      */
     fun <T> intent(binder: IntentBinder<View, T>): Observable<T> {
         val subject = PublishSubject.create<T>()
@@ -205,17 +205,17 @@ class ViewStateObserver<out View : MviView<T>, T>(val view: View) : DisposableOb
  * TODO: The nature of this Observer does not mean much to the implementor,
  * in terms of what is allowed and what isn't.
  */
-class LooseSubjectObserver<T>(val subject: Subject<T>) : DisposableObserver<T>() {
+class RelayObserver<T>(val subject: Subject<T>) : DisposableObserver<T>() {
     override fun onNext(t: T) {
         subject.onNext(t)
     }
 
     override fun onError(e: Throwable?) {
-        throw e!!
+        // Nope.
     }
 
     override fun onComplete() {
-        throw RuntimeException("A view intent should not complete.")
+        // Nope.
     }
 }
 
